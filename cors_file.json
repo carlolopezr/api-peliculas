@@ -1,0 +1,7 @@
+[
+    {
+      "origin": ["*"],
+      "method": ["GET", "HEAD", "PUT", "POST", "OPTIONS", "DELETE"],
+      "responseHeader": ["Content-Type", "Origin", "X-Requested-With", "Accept", "Authorization"]
+    }
+]
