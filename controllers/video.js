@@ -15,92 +15,67 @@ const storageClient = new Storage({
 
 const bucketName = 'peliculas_cineindependiente';
 
-const postVideo = async (req = request, res = response) => {
+const postVideo = async (req, res) => {
+  const { id } = req.query;
 
-  const  { id } = req.query
-  
   try {
-    const {email='prueba@pruebacineindependiente.cl', title="Dota 2 THE MOVIE"} = req.body
+    const { email = 'prueba@pruebacineindependiente.cl', title = 'Dota 2 THE MOVIE' } = req.body;
 
     if (!req.file) {
       return res.status(400).json({
-        msg: "Falta el archivo de video"
+        msg: 'Falta el archivo de video',
       });
     }
 
     const pathToFile = req.file.path;
-    const resolution = await getResolution(pathToFile) 
 
-    // console.log(req.file.mimetype);
+    // Subir el archivo a Google Cloud Storage
+    const bucket = storageClient.bucket(bucketName);
 
-    // const videoComprimido = await encode(pathToFile,outputPath )
-    // console.log(videoComprimido);
+    const pathCloudStorage = `${email}/${title}/${path.basename(pathToFile)}`;
+    const videoFile = bucket.file(pathCloudStorage);
 
-    // Leer el contenido del archivo
-    fs.readFile(pathToFile, (err, data) => {
-      if (err) {
-        console.error('Error al leer el archivo:', err);
-        return res.status(500).json({
-          msg: 'Error al leer el archivo'
-        });
-      }
+    const readStream = fs.createReadStream(pathToFile);
 
-      // Subir el archivo a Google Cloud Storage
-      const bucket = storageClient.bucket(bucketName);
-      
-      const pathCloudStorage = `${email}/${title}/${resolution.height}/${path.basename(pathToFile)}`
-      const videoFile = bucket.file(pathCloudStorage);
-
-      const fileStream = videoFile.createWriteStream({
-        metadata: {
-          contentType: req.file.mimetype
-        }
-      });
-
-      fileStream.on('error', (err) => {
-        console.error('Error al subir el archivo:', err);
-        return res.status(500).json({
-          msg: 'Error al subir el archivo'
-        });
-      });
-
-      fileStream.on('finish', () => {
-        // fs.unlink(videoComprimido, (unlinkErr) => {
-        //     if (unlinkErr) {
-        //       console.error('Error al eliminar el archivo local:', unlinkErr);
-        //     }
-        // });
-        return res.status(200).json({
-          msg: 'Video subido con éxito',
-          email,
-          id,
-          title,
-          resolution
-        });
-      });
-
-      fileStream.end(data);
+    const fileStream = videoFile.createWriteStream({
+      metadata: {
+        contentType: req.file.mimetype,
+      },
     });
 
-  } catch (error) {
+    readStream.pipe(fileStream);
+    fileStream.on('error', (err) => {
+      console.error('Error al subir el archivo:', err);
+      return res.status(500).json({
+        msg: 'Error al subir el archivo',
+      });
+    });
 
+    fileStream.on('finish', () => {
+      return res.status(200).json({
+        msg: 'Video subido con éxito',
+        email,
+        id,
+        title,
+      });
+    });
+
+    
+  } catch (error) {
     console.error('Error en la carga del video:', error);
 
     res.status(500).json({
-      msg: 'Error en la carga del video'
+      msg: 'Error en la carga del video',
     });
-
   }
 };
+
 
 
 const encode = async(req = request, res = response)=> {
 
   const {filename, id, resolution } = req.body
   const {height} = resolution
-
-
-  
 } 
 
 
