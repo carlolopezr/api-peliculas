@@ -1,26 +1,31 @@
 {
-  "name": "api-peliculas",
-  "version": "1.0.0",
-  "description": "",
-  "main": "app.js",
-  "scripts": {
-    "start": "node app.js",
-    "dev": "nodemon app.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "dependencies": {
-    "@google-cloud/storage": "^7.1.0",
-    "cors": "^2.8.5",
-    "dotenv": "^16.3.1",
-    "express": "^4.18.2",
-    "express-validator": "^7.0.1",
-    "fluent-ffmpeg": "^2.1.2",
-    "multer": "^1.4.5-lts.1"
-  },
-  "devDependencies": {
-    "nodemon": "^3.0.1"
-  }
+	"name": "api-peliculas",
+	"version": "1.0.0",
+	"description": "",
+	"main": "app.js",
+	"scripts": {
+		"start": "node app.js",
+		"dev": "nodemon app.js",
+		"test": "echo \"Error: no test specified\" && exit 1"
+	},
+	"keywords": [],
+	"author": "",
+	"license": "ISC",
+	"dependencies": {
+		"@google-cloud/storage": "^7.1.0",
+		"body-parser": "^1.20.2",
+		"busboy": "^1.6.0",
+		"cors": "^2.8.5",
+		"dotenv": "^16.3.1",
+		"express": "^4.18.2",
+		"express-validator": "^7.0.1",
+		"fast-stream-to-buffer": "^1.0.0",
+		"fluent-ffmpeg": "^2.1.2",
+		"fs-extra": "^11.1.1",
+		"md5": "^2.3.0",
+		"multer": "^1.4.5-lts.1"
+	},
+	"devDependencies": {
+		"nodemon": "^3.0.1"
+	}
 }
