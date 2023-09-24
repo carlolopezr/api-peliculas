@@ -1,13 +1,11 @@
 
-const checkFileType = (file, cb) => {
+const checkFileType = (mimeType) => {
+    
     const supportedVideoTypes = ['video/mp4','video/quicktime','video/x-msvideo', 'video/x-matroska'];
-    const mimetype = supportedVideoTypes.includes(file.mimetype);
+    const isValid = supportedVideoTypes.includes(mimeType);
 
-    if (!mimetype) {
-      cb(new Error(`El formato del archivo no es soportado '${file.mimetype}' Formatos soportados: MP4/AVI/MOV/MKV`));
-    }
-    else {
-        cb(null, true)
+    if (!isValid) {
+      throw new Error(`El formato del archivo no es soportado '${mimeType}' Formatos soportados: MP4/AVI/MOV/MKV`);
     }
 }
 
