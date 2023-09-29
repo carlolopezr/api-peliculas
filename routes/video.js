@@ -1,10 +1,10 @@
 const { Router } = require("express");
 
 const { postVideoOnServer, postVideoOnCloudStorage, 
-    uploadImageToServer, uploadImageToCloudinary, encode, videoDetection } = require("../controllers/video");
+    uploadImageToServer, uploadImageToCloudinary,videoDetection, generateHLS } = require("../controllers/video");
 
 const { fieldValidator } = require("../helpers/validator");
-const { check, body } = require("express-validator");
+const { check } = require("express-validator");
 const router = Router()
 
 // MULTER
@@ -42,15 +42,15 @@ router.get('/', (req, res) => {
 
 router.post('/',[
     check('id', 'Falta el id de usuario en la solicitud').not().isEmpty(),
-    // body('date', 'Falta el campo date en la solicitud').not().isEmpty(),
+    check('date', 'Falta el campo date en la solicitud').not().isEmpty(),
     fieldValidator,  
-], postVideoOnServer )
+], postVideoOnServer, generateHLS, postVideoOnCloudStorage, videoDetection)
 
-router.post('/encode', encode)
+// router.post('/encode', encode)
 
-router.post('/upload-cloudstorage', postVideoOnCloudStorage)
+// router.post('/upload-cloudstorage', postVideoOnCloudStorage)
 
-router.post('/video-detection', videoDetection)
+// router.post('/video-detection', videoDetection)
 
 router.post('/upload-image', uploadImageToServer, uploadImageToCloudinary);
 

@@ -8,6 +8,7 @@ const { checkFileType } = require('../helpers/customValidations');
 const ffmpeg = require('fluent-ffmpeg');
 const getResolution = require('../helpers/getResolution');
 const { videoDetectionService } = require('../services/videoDetectionService');
+const axios = require('axios');
 
 cloudinary.config({
 	cloud_name: process.env.CLOUDINARY_NAME,
@@ -27,7 +28,7 @@ const storage = new Storage({
 const bucketName = 'peliculas_cineindependiente';
 const bucket = storage.bucket(bucketName);
 
-const postVideoOnServer = async (req=request, res=response) => {
+const postVideoOnServer = async (req=request, res=response, next) => {
 	const bb = busboy({ headers: req.headers });
   
   const id = req.query.id
@@ -72,10 +73,12 @@ const postVideoOnServer = async (req=request, res=response) => {
       user_id:id,
       date:date
     }
+    req.data = data
 		res.status(200).json({ 
       msg: 'Video subido con éxito',
-      data
+      
     });
+    next()
 	});
 
   bb.on('error', (error) => {
@@ -88,21 +91,21 @@ const postVideoOnServer = async (req=request, res=response) => {
 	return;
 };
 
-const encode = async (req=request, res=response) => {
+const encode = async (req = request, res = response, next) => {
   const outputs = [];
   const resolutions = [
     { width: 3840, height: 2160, videoBitrate: '15000k' },
-    { width: 2048, height: 1080, videoBitrate: '5000k'},
+    { width: 2048, height: 1080, videoBitrate: '5000k' },
     { width: 1280, height: 720, videoBitrate: '2000k' },
     { width: 720, height: 480, videoBitrate: '1500k' },
-    { width: 640, height: 360, videoBitrate: '1000k'},
+    { width: 640, height: 360, videoBitrate: '1000k' },
   ];
 
   try {
-    const {inputPath,date, user_id} = req.body;
+    const { inputPath, date, user_id } = req.data;
     const originalResolution = await getResolution(inputPath);
     const inputPathInfo = path.parse(inputPath);
-
+    
     for (const resolution of resolutions) {
       if (
         resolution.width <= originalResolution.width &&
@@ -113,21 +116,21 @@ const encode = async (req=request, res=response) => {
           `${resolution.height}`,
           path.basename(inputPath)
         );
-        
+
         // Verificar si la carpeta `resolution.height` existe
         const folderPath = path.join(inputPathInfo.dir, `${resolution.height}`);
         if (!fs.existsSync(folderPath)) {
           // Si no existe, crearla
           fs.mkdirSync(folderPath, { recursive: true });
         }
-  
+
         await new Promise((resolve, reject) => {
-          ffmpeg(inputPath)
+          const ffmpegProcess = ffmpeg(inputPath)
             .videoCodec('h264_amf')
             .videoBitrate(resolution.videoBitrate)
             .audioCodec('aac')
             .audioBitrate('192k')
-            .outputOptions('-crf 23') // Ajusta el factor de calidad según tus necesidades
+            .outputOptions('-crf 23')
             .videoFilters(`scale=${resolution.width}:${resolution.height}`)
             .output(outputPath)
             .on('end', () => {
@@ -138,103 +141,136 @@ const encode = async (req=request, res=response) => {
               console.error(`Error en la compresión para ${resolution.width}x${resolution.height}:`, err);
               reject(err);
             })
-            .run();       
-            let paths = {
-              outputPath: outputPath,
-              width: resolution.width,
-              height: resolution.height
-            }
-            outputs.push(paths) 
-        });
+        
+
+          let paths = {
+            outputPath: outputPath,
+            width: resolution.width,
+            height: resolution.height,
+          };
+          outputs.push(paths);
+        })
       }
     }
-
+   
     let data = {
-      outputs:outputs,
-      date:date,
-      user_id
-    }
+        outputs: outputs,
+        date: date,
+        user_id:user_id,
+      };
 
-    res.status(200).json({
-      msg:'Conversión realizada con éxito',
-      data
-    })
+    req.data = data
+    console.log('Conversiónes realizadas con éxito');
+    next()
     
   } catch (error) {
-    res.status(500).json({
-      msg:`Hubo un error al intentar realizar la compresión del video: ${error}`
-    })
+    console.error(`Hubo un error al intentar realizar la compresión: ${error}`);
   }
 };
 
-const videoDetection = async (req=request, res=response) => {
+const videoDetection = async (req=request, res=response, next) => {
   
-  const {gcsUri} = req.body
-  if (!gcsUri) return res.status(400).json({msg: 'Falta la ruta al archivo'})
+  const {gcsUri, user_id, date} = req.data
+  if (!gcsUri) return console.error('Falta el link del video a Cloud Storage');
   
   try {
     const data = await videoDetectionService(gcsUri)
     console.log(data);
     if (!data.containsExplicitContent) {
-      return res.status(200).json({
-        msg:'Video sin contenido explícito'
-      })
-    }
-  } catch (error) {
-    return res.status(500).json({
-      msg:'Hubo un error al intentar realizar la detección de contenido explícito'
-    })  
-  }
+      console.log('Video sin contenido explicito');
+      
+    } else {
+      console.log(`El video contienede contenido explicito: ${data.explicitContentTimes}`);
 
-  
+    }
+    next()
+  } catch (error) {
+    return console.error('Hubo un error al intentar realizar la detección de contenido explícito')
+  }  
 }
 
-const postVideoOnCloudStorage = async (req=request, res=response) => {
+const postVideoOnCloudStorage = async (req=request, res=response, next) => {
   try {
-    const { id } = req.query;
-    const {outputs} = req.body
-    const { date = '231534234' } = req.body
-    if (!outputs) return res.status(400).json({msg: 'Falta la ruta al archivo'})
+    const { user_id, outputs, date } = req.data;
+    if (!outputs) return console.error('Faltan los outputs en la solicitud');
 
-
+    const folderPath = `uploads/${user_id}/${date}`
     const promises = [];
-    outputs.forEach(output => {
-      const pathCloudStorage = `${id}/${date}/${output.height}/${path.basename(output.outputPath)}`;
-      const uploadPromise = bucket.upload(output.outputPath, {
-        destination: pathCloudStorage
-      }).then((data) => {
-        const files = data[0];
-        return files.metadata 
-      })   
 
-      promises.push(uploadPromise);
-    })
+    const items = fs.readdirSync(folderPath)
+
+    for(const item of items) {
+      const itemPath = path.join(folderPath, item)
+      const isDirectory = fs.statSync(itemPath).isDirectory();
+
+      if (isDirectory) {
+        
+        const subItems = fs.readdirSync(itemPath);
+        const itemPathName = path.basename(itemPath)
+
+        for(const subItem of subItems) {
+          const subItemPath = path.join(itemPath, subItem)
+          const subItemPathName = path.basename(subItemPath)
+
+          const cloudStoragePath = `${user_id}/${date}/${itemPathName}/${subItemPathName}`
+
+          bucket.upload(subItemPath, {
+            destination:cloudStoragePath
+          }).then((data) => {
+            console.log(data[0].metadata.mediaLink);
+          })
+        }
+      }
+      else {
+        const uploadPromise = bucket.upload(itemPath, {
+          destination: `${user_id}/${date}/${path.basename(itemPath)}`
+        }).then((data) => {
+
+          const files = data[0]
+          return files.metadata
+        })
+
+        promises.push(uploadPromise)
+      }
+    }
 
     let data = {}
 
     Promise.all(promises)
       .then((metadata) => {
-          const gcsUri = `gs://${metadata[metadata.length - 1].bucket}/${metadata[metadata.length - 1].name}`
+          const gcsUri = `gs://${metadata[0].bucket}/${metadata[0].name}`;
+          const movieUrl = `${metadata[0].bucket}/${user_id}/${date}`
           data = {
-            gcsUri:gcsUri
-          }   
+            gcsUri:gcsUri,
+            user_id:user_id,
+            date:date,
+            movieUrl:movieUrl
+          }
+          
+          const datos = {
+            date:date,
+            user_id:user_id,
+            data: {
+              movieUrl:movieUrl
+            }
+          }
+
+          updateMovie(datos) 
         })
       .catch((error) => {
           console.error('Error al cargar los videos:', error);
         })
       .finally(() => {
-        
-          return res.status(200).json({
-            msg: 'Videos subidos con éxito a Cloud Storage',
-            data: data,
-          });
-        });
-    
+          req.data = data
+          console.log('Video subido con éxito a Cloud Storage');
+          next()
+    });
+
+
   } catch (error) {
     console.error('Error en la carga del video:', error);
   }
 };
-
 
 const uploadImageToServer = async (req, res, next) => {
 	const bb = busboy({ headers: req.headers });
@@ -283,11 +319,117 @@ const uploadImageToCloudinary = (req = request, res = response) => {
 	);
 };
 
+const generateHLS = async (req, res, next) => {
+  const outputs = [];
+  const resolutions = [
+    { width: 3840, height: 2160, videoBitrate: '15000k' },
+    { width: 2048, height: 1080, videoBitrate: '5000k' },
+    { width: 1280, height: 720, videoBitrate: '2000k' },
+    { width: 720, height: 480, videoBitrate: '1500k' },
+    { width: 640, height: 360, videoBitrate: '1000k' },
+  ];
+
+  try {
+    const { inputPath, date, user_id } = req.data;
+    const originalResolution = await getResolution(inputPath);
+    const inputPathInfo = path.parse(inputPath);
+
+    for (const resolution of resolutions) {
+      if (
+        resolution.width <= originalResolution.width &&
+        resolution.height <= originalResolution.height
+      ) {
+        const folderPath = path.join(inputPathInfo.dir, `${resolution.height}`);
+        if (!fs.existsSync(folderPath)) {
+          fs.mkdirSync(folderPath, { recursive: true });
+        }
+
+        const outputM3U8 = path.join(folderPath, `${user_id}_${date}.m3u8`);
+
+        await new Promise((resolve, reject) => {
+          ffmpeg(inputPath)
+            .videoFilter(`scale=${resolution.width}:${resolution.height}`)
+            .videoCodec('h264_amf')
+            .addOption('-profile:v', 'main')
+            .addOption('-level', '3.1')
+            .addOption('-g', '48')
+            .addOption('-keyint_min', '48')
+            .addOption('-sc_threshold', '0')
+            .addOption('-b:v', resolution.videoBitrate)
+            .audioCodec('aac')
+            .addOption('-b:a', '128k')
+            .addOption('-hls_time', '4')
+            .addOption('-hls_playlist_type', 'vod')
+            .output(outputM3U8)
+            .on('end', () => {
+              console.log(`Transcoding complete for ${resolution.width}x${resolution.height}`);
+              let paths = {
+                outputPath: outputM3U8,
+                width: resolution.width,
+                height: resolution.height,
+              };
+              outputs.push(paths);
+              resolve();
+            })
+            .on('error', (err) => {
+              console.error(`Error: ${err.message}`);
+              reject(err);
+            })
+            .run();
+        });
+      }
+    }
+
+    let data = {
+      outputs: outputs,
+      date: date,
+      user_id: user_id,
+    };
+
+    req.data = data;
+    console.log('Conversión realizada con éxito');
+    next();
+  } catch (error) {
+    console.error(`Error generating HLS: ${error}`);
+  }
+};
+
+const updateMovie = async(datos) => {
+  try {
+
+    const { date, user_id, data} = datos
+
+    // const apiUrl = 'https://server-cine-independiente.vercel.app/api/movie';
+    const apiUrl = 'http://localhost:3000/api/movie/update-movie'
+    const request = {
+      date:date,
+      user_id:user_id,
+      data: data
+    }
+
+    const config = {
+      headers: {
+        'Content-Type': 'application/json'
+      },
+    };
+
+    const response = await axios.put(apiUrl, request, config)
+
+    console.log(response.data);
+
+  } catch (error) {
+    
+    console.log('Error al actualizar película:', error);
+  }
+}
+
 module.exports = {
   postVideoOnServer,
   postVideoOnCloudStorage,
   encode,
   videoDetection,
   uploadImageToServer,
-  uploadImageToCloudinary
+  uploadImageToCloudinary,
+  generateHLS,
+  updateMovie
 };
