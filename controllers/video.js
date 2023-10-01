@@ -4,6 +4,8 @@ const { request, response } = require("express");
 const cloudinary = require('cloudinary').v2;
 const path = require('path');
 const busboy = require('busboy');
+const { promisify } = require('util');
+const writeFileAsync = promisify(fs.writeFile);
 const { checkFileType } = require('../helpers/customValidations');
 const ffmpeg = require('fluent-ffmpeg');
 const getResolution = require('../helpers/getResolution');
@@ -322,6 +324,23 @@ const uploadImageToCloudinary = (req = request, res = response) => {
 	);
 };
 
+const generateMasterPlaylist = async (resolutions, outputPath) => {
+  const playlists = resolutions.map((resolution) => ({
+    uri: `${resolution.height}/${resolution.user_id}_${resolution.date}.m3u8`,
+    width: resolution.width,
+    height: resolution.height,
+  }));
+
+  const masterPlaylist = playlists
+    .map(
+      (playlist) =>
+        `#EXT-X-STREAM-INF:BANDWIDTH=${playlist.width * 1000},RESOLUTION=${playlist.width}x${playlist.height}\n${playlist.uri}`
+    )
+    .join('\n');
+
+  await writeFileAsync(outputPath, masterPlaylist);
+};
+
 const generateHLS = async (req, res, next) => {
   const outputs = [];
   const resolutions = [
@@ -335,7 +354,6 @@ const generateHLS = async (req, res, next) => {
 
   try {
     const { inputPath, date, user_id } = req.data;
-    const email = req.email
     const originalResolution = await getResolution(inputPath);
     const inputPathInfo = path.parse(inputPath);
 
@@ -366,18 +384,19 @@ const generateHLS = async (req, res, next) => {
             .addOption('-hls_time', '4')
             .addOption('-hls_playlist_type', 'vod')
             .output(outputM3U8)
-            .on('end', () => {
+            .on('end', async () => {
               console.log(`Transcoding complete for ${resolution.width}x${resolution.height}`);
               let paths = {
                 outputPath: outputM3U8,
                 width: resolution.width,
                 height: resolution.height,
+                user_id: user_id,
+                date: date,
               };
               outputs.push(paths);
               resolve();
             })
             .on('error', (err) => {
-              console.error(`Error: ${err.message}`);
               datos = {
                 email:email,
                 subject: 'Error al intentar procesar su video',
@@ -388,20 +407,22 @@ const generateHLS = async (req, res, next) => {
               reject(err);
             })
             .run();
-        })
-        .catch((err) => {
-          console.log(err);
         });
-      }
-      else{ 
+        
+      } else {
         continue
       }
     }
+
+    // Genera el manifiesto maestro
+    const masterPlaylistPath = path.join(inputPathInfo.dir, 'master_playlist.m3u8');
+    await generateMasterPlaylist(outputs, masterPlaylistPath);
 
     let data = {
       outputs: outputs,
       date: date,
       user_id: user_id,
+      masterPlaylistPath: masterPlaylistPath,
     };
 
     req.data = data;
