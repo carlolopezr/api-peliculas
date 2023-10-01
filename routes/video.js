@@ -7,35 +7,7 @@ const { fieldValidator } = require("../helpers/validator");
 const { check } = require("express-validator");
 const router = Router()
 
-// MULTER
-// const storage = multer.diskStorage({
-//     destination: (req, file, cb) => {
-//         const id = req.query.id 
-//         const uploadDir = path.join(`./uploads/${id}`); 
-//         if (!fs.existsSync(uploadDir)) {
-//         fs.mkdirSync(uploadDir, { recursive: true });
-//         }
-//         cb(null, uploadDir);
-//     },
-    
-//     filename: (req, file, cb) => {
-//         cb(null, file.originalname)
-//     },
-//   });
-  
-//   const upload = multer({
-//     storage:storage, 
-//     limits: {
-//         fileSize: 64516992768
-//     },
-//     fileFilter: (req, file, cb) => {
-//         checkFileType(file, cb)
-//     }
-//   })
-
-
 //RUTAS
-
 router.get('/', (req, res) => {
     res.send('Hola mundo')
 })
@@ -46,11 +18,6 @@ router.post('/',[
     fieldValidator,  
 ], postVideoOnServer, generateHLS, postVideoOnCloudStorage, videoDetection)
 
-// router.post('/encode', encode)
-
-// router.post('/upload-cloudstorage', postVideoOnCloudStorage)
-
-// router.post('/video-detection', videoDetection)
 
 router.post('/upload-image', uploadImageToServer, uploadImageToCloudinary);
 

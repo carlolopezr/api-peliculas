@@ -98,83 +98,6 @@ const postVideoOnServer = async (req=request, res=response, next) => {
 	return;
 };
 
-const encode = async (req = request, res = response, next) => {
-  const outputs = [];
-  const resolutions = [
-    { width: 3840, height: 2160, videoBitrate: '15000k' },
-    { width: 2048, height: 1080, videoBitrate: '5000k' },
-    { width: 1280, height: 720, videoBitrate: '2000k' },
-    { width: 720, height: 480, videoBitrate: '1500k' },
-    { width: 640, height: 360, videoBitrate: '1000k' },
-  ];
-
-  try {
-    const { inputPath, date, user_id } = req.data;
-    const originalResolution = await getResolution(inputPath);
-    const inputPathInfo = path.parse(inputPath);
-    
-    for (const resolution of resolutions) {
-      if (
-        resolution.width <= originalResolution.width &&
-        resolution.height <= originalResolution.height
-      ) {
-        const outputPath = path.join(
-          inputPathInfo.dir,
-          `${resolution.height}`,
-          path.basename(inputPath)
-        );
-
-        // Verificar si la carpeta `resolution.height` existe
-        const folderPath = path.join(inputPathInfo.dir, `${resolution.height}`);
-        if (!fs.existsSync(folderPath)) {
-          // Si no existe, crearla
-          fs.mkdirSync(folderPath, { recursive: true });
-        }
-
-        await new Promise((resolve, reject) => {
-          const ffmpegProcess = ffmpeg(inputPath)
-            .videoCodec('h264_amf')
-            .videoBitrate(resolution.videoBitrate)
-            .audioCodec('aac')
-            .audioBitrate('192k')
-            .outputOptions('-crf 23')
-            .videoFilters(`scale=${resolution.width}:${resolution.height}`)
-            .output(outputPath)
-            .on('end', () => {
-              console.log(`Compresión completada para ${resolution.width}x${resolution.height}`);
-              resolve();
-            })
-            .on('error', (err) => {
-              console.error(`Error en la compresión para ${resolution.width}x${resolution.height}:`, err);
-              reject(err);
-            })
-        
-
-          let paths = {
-            outputPath: outputPath,
-            width: resolution.width,
-            height: resolution.height,
-          };
-          outputs.push(paths);
-        })
-      }
-    }
-   
-    let data = {
-        outputs: outputs,
-        date: date,
-        user_id:user_id,
-      };
-
-    req.data = data
-    console.log('Conversiónes realizadas con éxito');
-    next()
-    
-  } catch (error) {
-    console.error(`Hubo un error al intentar realizar la compresión: ${error}`);
-  }
-};
-
 const videoDetection = async (req=request, res=response, next) => {
   
   const {gcsUri, user_id, date} = req.data
@@ -494,7 +417,7 @@ const updateMovie = async(datos) => {
 
     const { date, user_id, data} = datos
 
-    const apiUrl = `${process.env.API_SERVER}/movie`
+    const apiUrl = `${process.env.API_SERVER}/movie/update-movie`
     // const apiUrl = 'http://localhost:3000/api/movie/update-movie'
     const request = {
       date:date,
@@ -513,8 +436,6 @@ const updateMovie = async(datos) => {
     if (response.status==404) {
       throw new Error('Película no encontrada en la base de datos')
     }
-
-    console.log(response);
 
   } catch (error) {
     
@@ -564,7 +485,6 @@ const deleteFilesInBucket = async (user_id, date) => {
 module.exports = {
   postVideoOnServer,
   postVideoOnCloudStorage,
-  encode,
   videoDetection,
   uploadImageToServer,
   uploadImageToCloudinary,
