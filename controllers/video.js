@@ -207,7 +207,7 @@ const postVideoOnCloudStorage = async (req=request, res=response, next) => {
     Promise.all(promises)
       .then((metadata) => {
           const gcsUri = `gs://${metadata[0].bucket}/${metadata[0].name}`;
-          const movieUrl = `${metadata[0].bucket}/${user_id}/${date}`
+          const movieUrl = `${metadata[0].bucket}/${user_id}/${date}/master_playlist.m3u8`
           data = {
             gcsUri:gcsUri,
             user_id:user_id,
