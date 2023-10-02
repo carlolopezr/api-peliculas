@@ -100,48 +100,46 @@ const postVideoOnServer = async (req=request, res=response, next) => {
 
 const videoDetection = async (req=request, res=response, next) => {
   
-  const {gcsUri, user_id, date} = req.data
+  const {gcsUri, user_id, date, movieUrl} = req.data
   const {email} = req.email
+  const errors = req.errors
+  let explicitContent = ''
   if (!gcsUri) return console.error('Falta el link del video a Cloud Storage');
   
   try {
     const data = await videoDetectionService(gcsUri)
       .catch((err) => {
-        const datos = {
-          email:email,
-          subject:`Error al intentar realizar la detección de contenido explícito`,
-          text:`Hubo un error inesperado al intentar realizar la detección de contenido explícito 
-          por favor vuelva a intentarlo nuevamente más tarde. 
-          Error: ${err}`
-        }
-        sendNotificationEmail(datos)
+        errors.push('Ocurrio un error al intentar realizar la detección de contenido explícito')
       })
-    console.log(data);
-    if (!data.containsExplicitContent) {
-      const datos = {
-        date:date,
-        user_id:user_id,
-        data: {
-          explicitContent: false
-        }
-      }
 
-      await updateMovie(datos)
+    if (!data.containsExplicitContent) {
+      explicitContent = false
       console.log('Video sin contenido explicito');
       
     } else {
-      const datos = {
-        date:date,
-        user_id:user_id,
-        data: {
-          explicitContent: true
-        }
-      }
-
-      await updateMovie(datos)
+      explicitContent = true
       console.log(`El video contienede contenido explicito: ${data.explicitContentTimes}`);
-
     }
+
+    if (errors.length > 0) {
+      const data = {
+        email:email,
+        subject:'Hubo un error en la solicitud para subir la película',
+        text: errors.join(',')
+      }
+      await sendNotificationEmail(data)
+      return
+    }
+
+    const datos = {
+      date:date,
+      user_id:user_id,
+      data: {
+        explicitContent: explicitContent,
+        movieUrl:movieUrl
+      }
+    }
+    await updateMovie(datos)
     next()
   } catch (error) {
     return console.error('Hubo un error al intentar realizar la detección de contenido explícito')
@@ -152,12 +150,12 @@ const postVideoOnCloudStorage = async (req=request, res=response, next) => {
   try {
     const { user_id, outputs, date } = req.data;
     const email = req.email
+    const errors = req.errors
     console.log(email);
     if (!outputs) return console.error('Faltan los outputs en la solicitud');
 
     const folderPath = `uploads/${user_id}/${date}`
     const promises = [];
-    const errors = [];
 
     const items = fs.readdirSync(folderPath)
 
@@ -180,15 +178,9 @@ const postVideoOnCloudStorage = async (req=request, res=response, next) => {
             destination:cloudStoragePath
           })
           .catch((err) => {
-            const datos = {
-              email:email,
-              subject:`Error al subir el video a Cloud Storage`,
-              text:`Hubo un error inesperado al intentar subir su película a Cloud Storage por favor vuelva a intentarlo nuevamente más tarde
-              Error: ${err}`
-            }
-            sendNotificationEmail(datos)
+            errors.push('Hubo un error al intentar subir el video Cloud Storage')
+            next(err)
           })
-
         }
       }
       else {
@@ -200,13 +192,8 @@ const postVideoOnCloudStorage = async (req=request, res=response, next) => {
           return files.metadata
         })
         .catch((err) => {
-          const datos = {
-            email:email,
-            subject:`Error al subir el video a Cloud Storage`,
-            text:`Hubo un error inesperado al intentar subir su película a Cloud Storage por favor vuelva a intentarlo nuevamente más tarde
-            Error: ${err}`
-          }
-          sendNotificationEmail(datos)
+          errors.push('Hubo un error al intentar subir el video Cloud Storage')
+          next(err)
         })
 
         promises.push(uploadPromise)
@@ -225,51 +212,19 @@ const postVideoOnCloudStorage = async (req=request, res=response, next) => {
             date:date,
             movieUrl:movieUrl
           }
-          
-          //Actualizar URL de la película
-          const datos = {
-            date:date,
-            user_id:user_id,
-            data: {
-              movieUrl:movieUrl
-            }
-          }
-
-          updateMovie(datos)
-            .then(() => {
-              console.log('Película actualizada correctamente');
-              next()
-            })
-            .catch((err) => {
-              console.log('hubo un error al intentar actualizar el URL de la película:', err);
-              deleteFilesInBucket(user_id, date)
-                .then(() => {
-                  console.log('Película eliminada con éxito');
-                  return
-                })
-                .catch(() => {
-                  console.log('Error al intentar eliminar archivos');
-                  return
-                })
-
-            })
-        })
-        .catch((err) => {
-          const datos = {
-            email:email,
-            subject:`Error al subir el video a Cloud Storage`,
-            text:`Hubo un error inesperado al intentar subir su película a Cloud Storage por favor vuelva a intentarlo nuevamente más tarde
-            Error: ${err}`
-          }
-          sendNotificationEmail(datos)
         })
       .finally(() => {
-          req.data = data
-          console.log('Video subido con éxito a Cloud Storage');
-          next()
+        req.data = data
+        console.log('Video subido con éxito a Cloud Storage');
+          
     });
+    
+    if (errors.length > 0) {
+      await deleteFilesInBucket(user_id, date)
+    }
 
-
+    req.errors = errors
+    next()
   } catch (error) {
     console.error('Error en la carga del video:', error);
   }
@@ -324,6 +279,7 @@ const uploadImageToCloudinary = (req = request, res = response) => {
 
 const generateHLS = async (req, res, next) => {
   const outputs = [];
+  const errors = []
   const resolutions = [
     { width: 3840, height: 2160, videoBitrate: '15000k' },
     { width: 2048, height: 1080, videoBitrate: '5000k' },
@@ -378,19 +334,13 @@ const generateHLS = async (req, res, next) => {
             })
             .on('error', (err) => {
               console.error(`Error: ${err.message}`);
-              datos = {
-                email:email,
-                subject: 'Error al intentar procesar su video',
-                text: `Ocurrio un error al intentar procesar su video con id: ${user_id}_${date}, por favor vuelva a intentarlo. 
-                Error: ${err}`
-              }
-              sendNotificationEmail(datos)
               reject(err);
             })
             .run();
         })
         .catch((err) => {
-          console.log(err);
+          errors.push('Ocurrio un error al intentar procesar su video')
+          next(err)
         });
       }
       else{ 
@@ -405,6 +355,7 @@ const generateHLS = async (req, res, next) => {
     };
 
     req.data = data;
+    req.errors = errors
     console.log('Conversión realizada con éxito');
     next();
   } catch (error) {
