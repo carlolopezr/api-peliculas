@@ -180,6 +180,7 @@ const postVideoOnCloudStorage = async (req=request, res=response, next) => {
             destination:cloudStoragePath
           })
           .catch((err) => {
+            console.log(err);
             errors.push('Hubo un error al intentar subir el video Cloud Storage')
             next(err)
           })
@@ -194,6 +195,7 @@ const postVideoOnCloudStorage = async (req=request, res=response, next) => {
           return files.metadata
         })
         .catch((err) => {
+          console.log(err);
           errors.push('Hubo un error al intentar subir el video Cloud Storage')
           next(err)
         })
@@ -215,18 +217,19 @@ const postVideoOnCloudStorage = async (req=request, res=response, next) => {
             movieUrl:movieUrl
           }
         })
-      .finally(() => {
+      .finally(async() => {
         req.data = data
         console.log('Video subido con éxito a Cloud Storage');
-          
+
+        if (errors.length > 0) {
+          await deleteFilesInBucket(user_id, date)
+        }
+    
+        req.errors = errors
+        next()   
     });
     
-    if (errors.length > 0) {
-      await deleteFilesInBucket(user_id, date)
-    }
-
-    req.errors = errors
-    next()
+    
   } catch (error) {
     console.error('Error en la carga del video:', error);
   }
@@ -300,12 +303,12 @@ const generateHLS = async (req, res, next) => {
   const outputs = [];
   const errors = []
   const resolutions = [
-    { width: 3840, height: 2160, videoBitrate: '15000k' },
-    { width: 2048, height: 1080, videoBitrate: '5000k' },
-    { width: 1920, height: 1080, videoBitrate: '5000k' },
-    { width: 1280, height: 720, videoBitrate: '2000k' },
-    { width: 720, height: 480, videoBitrate: '1500k' },
-    { width: 640, height: 360, videoBitrate: '1000k' },
+    { width: 3840, height: 2160, videoBitrate: '30000k' },
+    { width: 2048, height: 1080, videoBitrate: '15000k' },
+    { width: 1920, height: 1080, videoBitrate: '15000k' },
+    { width: 1280, height: 720, videoBitrate: '8000k' },
+    { width: 720, height: 480, videoBitrate: '5000k' },
+    { width: 640, height: 360, videoBitrate: '4000k' },
   ];
 
   try {
@@ -452,6 +455,7 @@ const deleteFilesInBucket = async (user_id, date) => {
   const [files] = await bucket.getFiles({ prefix: bucketPath });
 
   const deletePromises = files.map((file) => {
+    console.log('Eliminando videos...');
     return file.delete();
   });
 

@@ -16,7 +16,7 @@ router.post('/',[
     check('id', 'Falta el id de usuario en la solicitud').not().isEmpty(),
     check('date', 'Falta el campo date en la solicitud').not().isEmpty(),
     fieldValidator,  
-], postVideoOnServer, generateHLS, postVideoOnCloudStorage)
+], postVideoOnServer, generateHLS, postVideoOnCloudStorage, videoDetection)
 
 
 router.post('/upload-image', uploadImageToServer, uploadImageToCloudinary);
