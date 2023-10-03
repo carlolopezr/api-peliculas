@@ -289,12 +289,12 @@ const generateMasterPlaylist = async (resolutions, outputPath) => {
     height: resolution.height,
   }));
 
-  const masterPlaylist = playlists
+  const masterPlaylist = `#EXTM3U\n${playlists
     .map(
       (playlist) =>
         `#EXT-X-STREAM-INF:BANDWIDTH=${playlist.width * 1000},RESOLUTION=${playlist.width}x${playlist.height}\n${playlist.uri}`
     )
-    .join('\n');
+    .join('\n')}`;
 
   await writeFileAsync(outputPath, masterPlaylist);
 };
@@ -340,7 +340,7 @@ const generateHLS = async (req, res, next) => {
             .addOption('-b:v', resolution.videoBitrate)
             .audioCodec('aac')
             .addOption('-b:a', '128k')
-            .addOption('-hls_time', '4')
+            .addOption('-hls_time', '30')
             .addOption('-hls_playlist_type', 'vod')
             .output(outputM3U8)
             .on('end', async () => {
