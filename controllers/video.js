@@ -94,7 +94,7 @@ const postVideoOnServer = async (req=request, res=response, next) => {
     next()
 	});
 
-  bb.on('error', (error) => {
+  bb.on('error', (err) => {
     const error = new Error(`Hubo un error al cargar el video`);
     next(error)
     return res.status(500).json({
