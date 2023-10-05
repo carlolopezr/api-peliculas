@@ -103,15 +103,20 @@ const postVideoOnServer = async (req=request, res=response, next) => {
 const videoDetection = async (req=request, res=response, next) => {
   
   const {gcsUri, user_id, date, movieUrl} = req.data
-  const {email} = req.email
-  const errors = req.errors
+  const email = req.email
   let explicitContent = ''
-  if (!gcsUri) return console.error('Falta el link del video a Cloud Storage');
+  const error = new Error('Hubo un error al intentar analizar su película con el detector de contenido explícito')
+
+  if (!gcsUri) {
+    next(error)
+    return
+  }
   
   try {
     const data = await videoDetectionService(gcsUri)
       .catch((err) => {
-        errors.push('Ocurrio un error al intentar realizar la detección de contenido explícito')
+        next(error)
+        return
       })
 
     if (!data.containsExplicitContent) {
@@ -123,25 +128,25 @@ const videoDetection = async (req=request, res=response, next) => {
       console.log(`El video contienede contenido explicito: ${data.explicitContentTimes}`);
     }
 
-    if (errors.length > 0) {
-      const data = {
-        email:email,
-        subject:'Hubo un error en la solicitud para subir la película',
-        text: errors.join(',')
-      }
-      await sendNotificationEmail(data)
-      return
-    }
-
     const datos = {
       date:date,
       user_id:user_id,
       data: {
         explicitContent: explicitContent,
-        movieUrl:movieUrl
+        movieUrl:movieUrl,
+        enabled:true
       }
     }
     await updateMovie(datos)
+    
+    const notificationEmail = {
+      email:email,
+      subject:'Película cargada exitosamente!!' ,
+      text: `¡Felicidades! Tu película se ha cargado exitosamente y está lista para que otros usuarios la disfruten. 
+      ¡Que la disfrutes al máximo junto a la comunidad!`,
+    }
+
+    await sendNotificationEmail(notificationEmail)
     next()
   } catch (error) {
     return console.error('Hubo un error al intentar realizar la detección de contenido explícito')
@@ -152,7 +157,6 @@ const postVideoOnCloudStorage = async (req=request, res=response, next) => {
   try {
     const { user_id, outputs, date } = req.data;
     const email = req.email
-    const errors = req.errors
     console.log(email);
     if (!outputs) return console.error('Faltan los outputs en la solicitud');
 
@@ -180,10 +184,12 @@ const postVideoOnCloudStorage = async (req=request, res=response, next) => {
             destination:cloudStoragePath
           })
           .catch((err) => {
-            console.log(err);
-            errors.push('Hubo un error al intentar subir el video Cloud Storage')
-            next(err)
+            const error = new Error('Hubo un error al intentar subir el video Cloud Storage')
+            error.customStatus = 601
+            next(error)
+            return
           })
+
         }
       }
       else {
@@ -195,9 +201,10 @@ const postVideoOnCloudStorage = async (req=request, res=response, next) => {
           return files.metadata
         })
         .catch((err) => {
-          console.log(err);
-          errors.push('Hubo un error al intentar subir el video Cloud Storage')
-          next(err)
+          const error = new Error('Hubo un error al intentar subir el video Cloud Storage')
+          error.customStatus = 601
+          next(error)
+          return
         })
 
         promises.push(uploadPromise)
@@ -217,15 +224,9 @@ const postVideoOnCloudStorage = async (req=request, res=response, next) => {
             movieUrl:movieUrl
           }
         })
-      .finally(async() => {
+      .finally(() => {
         req.data = data
         console.log('Video subido con éxito a Cloud Storage');
-
-        if (errors.length > 0) {
-          await deleteFilesInBucket(user_id, date)
-        }
-    
-        req.errors = errors
         next()   
     });
     
@@ -301,7 +302,6 @@ const generateMasterPlaylist = async (resolutions, outputPath) => {
 
 const generateHLS = async (req, res, next) => {
   const outputs = [];
-  const errors = []
   const resolutions = [
     { width: 3840, height: 2160, videoBitrate: '30000k' },
     { width: 2048, height: 1080, videoBitrate: '15000k' },
@@ -311,15 +311,35 @@ const generateHLS = async (req, res, next) => {
     { width: 640, height: 360, videoBitrate: '4000k' },
   ];
 
+  const hlsTime = [
+    {max: 600, min: 0, hls: '6'},
+    {max: 1800, min: 601, hls: '15'},
+    {max: 3600, min: 1801, hls: '30'},
+    {max: 7200, min: 3601, hls: '60'},
+    {max:99999999, min: 7201, hls: '120'}
+  ]
+
   try {
+
+    let selectedHlsTime = '30';
+
     const { inputPath, date, user_id } = req.data;
-    const originalResolution = await getResolution(inputPath);
+    const {width, height, size, duration} = await getResolution(inputPath);
     const inputPathInfo = path.parse(inputPath);
+
+    for (const item of hlsTime) {
+      if (duration >= item.min && duration <= item.max) {
+        selectedHlsTime = item.hls;
+        break; // Detenemos la búsqueda una vez que encontramos la coincidencia
+      }
+    }
+  
+    console.log(width, height, size, duration, selectedHlsTime);
 
     for (const resolution of resolutions) {
       if (
-        resolution.width <= originalResolution.width &&
-        resolution.height <= originalResolution.height
+        resolution.width <= width &&
+        resolution.height <= height
       ) {
         const folderPath = path.join(inputPathInfo.dir, `${resolution.height}`);
         if (!fs.existsSync(folderPath)) {
@@ -330,7 +350,7 @@ const generateHLS = async (req, res, next) => {
 
         await new Promise((resolve, reject) => {
           ffmpeg(inputPath)
-            .videoFilter(`scale=${resolution.width}:${resolution.height}`)
+            .videoFilter(`scale=${resolution.width}:-2`)
             .videoCodec('h264_amf')
             .addOption('-profile:v', 'main')
             .addOption('-level', '3.1')
@@ -340,7 +360,7 @@ const generateHLS = async (req, res, next) => {
             .addOption('-b:v', resolution.videoBitrate)
             .audioCodec('aac')
             .addOption('-b:a', '128k')
-            .addOption('-hls_time', '30')
+            .addOption('-hls_time', selectedHlsTime)
             .addOption('-hls_playlist_type', 'vod')
             .output(outputM3U8)
             .on('end', async () => {
@@ -362,8 +382,8 @@ const generateHLS = async (req, res, next) => {
             .run();
         })
         .catch((err) => {
-          errors.push('Ocurrio un error al intentar procesar su video')
-          next(err)
+          const error = new Error('Hubo un error al intentar procesar su película')
+          next(error)
         });
         
       } else {
@@ -383,7 +403,6 @@ const generateHLS = async (req, res, next) => {
     };
 
     req.data = data;
-    req.errors = errors
     console.log('Conversión realizada con éxito');
     next();
   } catch (error) {
@@ -426,7 +445,9 @@ const sendNotificationEmail = async(data) => {
   
   try {
     const {email, subject, text} = data
+    console.log(email,subject,text);
     const apiUrl = `${process.env.API_SERVER}/user/send-notification-email`
+    console.log(apiUrl);
     // const apiUrl = `http://localhost:3000/api/user/send-notification-email`
 
     const request = {
@@ -448,6 +469,17 @@ const sendNotificationEmail = async(data) => {
   }
 }
 
+const deleteMovie = async(req, res) => {
+  const id = req.params.id
+  const {date} = req.body
+  try {
+    await deleteFilesInBucket(id,date)
+    console.log('Película borrada con éxito');
+  } catch (error) {
+    console.log('Hubo un error al borrar la película');
+  }
+}
+
 const deleteFilesInBucket = async (user_id, date) => {
 
   const bucketPath = `${user_id}/${date}`;
@@ -455,12 +487,13 @@ const deleteFilesInBucket = async (user_id, date) => {
   const [files] = await bucket.getFiles({ prefix: bucketPath });
 
   const deletePromises = files.map((file) => {
-    console.log('Eliminando videos...');
     return file.delete();
   });
 
+  console.log('Eliminando videos');
   return Promise.all(deletePromises);
 };
+
 
 module.exports = {
   postVideoOnServer,
@@ -469,5 +502,8 @@ module.exports = {
   uploadImageToServer,
   uploadImageToCloudinary,
   generateHLS,
-  updateMovie
+  updateMovie,
+  sendNotificationEmail,
+  deleteFilesInBucket,
+  deleteMovie
 };

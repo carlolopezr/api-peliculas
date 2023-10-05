@@ -1,11 +1,14 @@
 const { Router } = require("express");
 
 const { postVideoOnServer, postVideoOnCloudStorage, 
-    uploadImageToServer, uploadImageToCloudinary,videoDetection, generateHLS } = require("../controllers/video");
+    uploadImageToServer, uploadImageToCloudinary,videoDetection, generateHLS, deleteMovie } = require("../controllers/video");
 
 const { fieldValidator } = require("../helpers/validator");
-const { check } = require("express-validator");
+const { check, body } = require("express-validator");
+const errorHandler = require("../middlewares/errorHandler");
 const router = Router()
+
+
 
 //RUTAS
 router.get('/', (req, res) => {
@@ -16,20 +19,14 @@ router.post('/',[
     check('id', 'Falta el id de usuario en la solicitud').not().isEmpty(),
     check('date', 'Falta el campo date en la solicitud').not().isEmpty(),
     fieldValidator,  
-], postVideoOnServer, generateHLS, postVideoOnCloudStorage, videoDetection)
-
+], postVideoOnServer, generateHLS, postVideoOnCloudStorage, videoDetection, errorHandler)
 
 router.post('/upload-image', uploadImageToServer, uploadImageToCloudinary);
 
+router.delete('/delete-movie',[
+    check('id', 'Falta el id de usuario en la solicitud').not().isEmpty(),
+    check('date', 'Falta el campo date en la solicitud').not().isEmpty(),
+], deleteMovie)
 
-// Middleware para manejar errores de multer
-// router.use((err, req, res, next) => {
-//     if (err instanceof multer.MulterError) {
-//       return res.status(400).json({ error: 'Error en la carga del archivo: ' + err.message });
-//     } else if (err) {
-//       return res.status(400).json({ error: 'Error en la carga del archivo: ' + err.message });
-//     }
-//     next();
-// });
   
 module.exports = router
