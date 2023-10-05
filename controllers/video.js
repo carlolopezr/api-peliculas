@@ -62,8 +62,10 @@ const postVideoOnServer = async (req=request, res=response, next) => {
 		const stream = fs.createWriteStream(filePath);
 
     file.on('error', (err) => {
-      res.status(400).json({
-        msg: `Hubo un error al cargar el archivo ${fileName}: ${err}`
+      const error = new Error(`Hubo un error al cargar el archivo ${fileName}`);
+      next(error)
+      return res.status(500).json({
+        msg:`${error.message}`
       })
     });
 
@@ -93,8 +95,10 @@ const postVideoOnServer = async (req=request, res=response, next) => {
 	});
 
   bb.on('error', (error) => {
-    res.status(400).json({
-      msg: `Hubo un error al cargar el video: ${error}`
+    const error = new Error(`Hubo un error al cargar el video`);
+    next(error)
+    return res.status(500).json({
+        msg:`${error.message}`
     })
   })
   
