@@ -31,6 +31,7 @@ const bucketName = 'peliculas_cineindependiente';
 const bucket = storage.bucket(bucketName);
 
 const postVideoOnServer = async (req=request, res=response, next) => {
+
 	const bb = busboy({ headers: req.headers });
   
   const id = req.query.id
@@ -50,11 +51,12 @@ const postVideoOnServer = async (req=request, res=response, next) => {
     try {
       checkFileType(fileMimetype)
     } catch (error) {
-      
+      next(error)
       return res.status(400).json({
         msg:error.message
       })
     }
+    
     const uniqueFileName = `${id}_${date}.mp4`
     filePath = path.join(uploadDir, uniqueFileName);
 		const stream = fs.createWriteStream(filePath);
@@ -106,6 +108,7 @@ const videoDetection = async (req=request, res=response, next) => {
   const email = req.email
   let explicitContent = ''
   const error = new Error('Hubo un error al intentar analizar su película con el detector de contenido explícito')
+  error.customStatus = 602
 
   if (!gcsUri) {
     next(error)
@@ -383,7 +386,9 @@ const generateHLS = async (req, res, next) => {
         })
         .catch((err) => {
           const error = new Error('Hubo un error al intentar procesar su película')
+          error.customStatus = 602
           next(error)
+          return
         });
         
       } else {

@@ -3,8 +3,11 @@ const { sendNotificationEmail, deleteFilesInBucket } = require("../controllers/v
 
 const errorHandler = async (err, req, res, next) => {
     try {
-      const email = req.email;
-      const { user_id, date } = req.data;
+      if (!req.email || !req.data) {
+        return;
+      }
+      const email = req.email || null;
+      const { user_id, date } = req.data || null;
       console.log(email, user_id, date);
       const notificaciónEmail = {
         email: email,
@@ -14,15 +17,16 @@ const errorHandler = async (err, req, res, next) => {
 
       const statusCode = err.customStatus || 500
   
-      if (err) {
+      if (statusCode == 602) {
         await sendNotificationEmail(notificaciónEmail);
       }
   
       if (statusCode == 601) {
+        await sendNotificationEmail(notificaciónEmail);
         await deleteFilesInBucket(user_id, date);
       }
-  
-      return;
+      
+      return
     } catch (error) {
       console.log(error);
     }
