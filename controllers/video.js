@@ -11,6 +11,8 @@ const ffmpeg = require('fluent-ffmpeg');
 const getResolution = require('../helpers/getResolution');
 const { videoDetectionService } = require('../services/videoDetectionService');
 const axios = require('axios');
+const { kill } = require('process');
+const getImageResolution = require('../helpers/getImageResolution');
 
 cloudinary.config({
 	cloud_name: process.env.CLOUDINARY_NAME,
@@ -271,7 +273,17 @@ const uploadImageToServer = async (req, res, next) => {
 	req.pipe(bb);
 };
 
-const uploadImageToCloudinary = (req = request, res = response) => {
+const uploadImageToCloudinary = async(req = request, res = response) => {
+
+  const filePath = req.filePath
+  const {width, height, type} = await getImageResolution(filePath)
+
+  if(width < 1920 || height < 1080) {
+    return res.status(400).json({
+      msg:`Las dimensiones de la imagen deben ser mayor a 1920x1080, dimensiones actuales:${width}x${height}`,
+    })
+  }
+
 	cloudinary.uploader.upload(
 		req.filePath,
 		{ public_id: `${req.filename}${req.date}`, folder: `${req.userId}` },
@@ -330,9 +342,17 @@ const generateHLS = async (req, res, next) => {
 
     let selectedHlsTime = '30';
 
+    const maxFileSize = 60 * Math.pow(1024, 3);
     const { inputPath, date, user_id } = req.data;
     const {width, height, size, duration} = await getResolution(inputPath);
     const inputPathInfo = path.parse(inputPath);
+
+    if (size > maxFileSize ) {
+      const error = new Error('El tamaño del archivo no puede superar los 60GB')
+      error.customStatus = 602
+      next(error)
+      return
+    }
 
     for (const item of hlsTime) {
       if (duration >= item.min && duration <= item.max) {
@@ -383,6 +403,7 @@ const generateHLS = async (req, res, next) => {
               resolve();
             })
             .on('error', (err) => {
+              kill()
               console.error(`Error: ${err.message}`);
               reject(err);
             })

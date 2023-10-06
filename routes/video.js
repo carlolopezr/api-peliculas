@@ -8,8 +8,6 @@ const { check, body } = require("express-validator");
 const errorHandler = require("../middlewares/errorHandler");
 const router = Router()
 
-
-
 //RUTAS
 router.get('/', (req, res) => {
     res.send('Hola mundo')
