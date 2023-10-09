@@ -280,7 +280,7 @@ const uploadImageToCloudinary = async(req = request, res = response) => {
 
   if(width < 1920 || height < 1080) {
     return res.status(400).json({
-      msg:`Las dimensiones de la imagen deben ser mayor a 1920x1080, dimensiones actuales:${width}x${height}`,
+      msg:`Las dimensiones de la imagen deben ser al menos 1920x1080, dimensiones actuales:${width}x${height}`,
     })
   }
 
@@ -378,7 +378,7 @@ const generateHLS = async (req, res, next) => {
         await new Promise((resolve, reject) => {
           ffmpeg(inputPath)
             .videoFilter(`scale=${resolution.width}:-2`)
-            .videoCodec('h264_amf')
+            .videoCodec('h264_nvenc')
             .addOption('-profile:v', 'main')
             .addOption('-level', '3.1')
             .addOption('-g', '48')
