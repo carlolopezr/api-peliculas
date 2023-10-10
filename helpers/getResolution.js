@@ -7,7 +7,7 @@ const getResolution = (path) => {
                 if (err) reject(err)
         
                 const {width, height} = metadata.streams[0]
-                const duration = Math.round(metadata.format.duration);
+                const duration = metadata.format.duration;
                 const size = metadata.format.size
                 resolve ({
                     width:width,

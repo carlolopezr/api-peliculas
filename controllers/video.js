@@ -110,7 +110,7 @@ const postVideoOnServer = async (req=request, res=response, next) => {
 
 const videoDetection = async (req=request, res=response, next) => {
   
-  const {gcsUri, user_id, date, movieUrl} = req.data
+  const {gcsUri, user_id, date, movieUrl, duration} = req.data
   const email = req.email
   let explicitContent = ''
   const error = new Error('Hubo un error al intentar analizar su película con el detector de contenido explícito')
@@ -143,7 +143,8 @@ const videoDetection = async (req=request, res=response, next) => {
       data: {
         explicitContent: explicitContent,
         movieUrl:movieUrl,
-        enabled:true
+        enabled:true,
+        duration:duration
       }
     }
     await updateMovie(datos)
@@ -346,6 +347,7 @@ const generateHLS = async (req, res, next) => {
     const { inputPath, date, user_id } = req.data;
     const {width, height, size, duration} = await getResolution(inputPath);
     const inputPathInfo = path.parse(inputPath);
+    const durationNumber = Math.round(duration)
 
     if (size > maxFileSize ) {
       const error = new Error('El tamaño del archivo no puede superar los 60GB')
@@ -355,13 +357,13 @@ const generateHLS = async (req, res, next) => {
     }
 
     for (const item of hlsTime) {
-      if (duration >= item.min && duration <= item.max) {
+      if (durationNumber >= item.min && duration <= item.max) {
         selectedHlsTime = item.hls;
         break; // Detenemos la búsqueda una vez que encontramos la coincidencia
       }
     }
   
-    console.log(width, height, size, duration, selectedHlsTime);
+    console.log(width, height, size, durationNumber, selectedHlsTime);
 
     for (const resolution of resolutions) {
       if (
@@ -430,6 +432,7 @@ const generateHLS = async (req, res, next) => {
       date: date,
       user_id: user_id,
       masterPlaylistPath: masterPlaylistPath,
+      duration:duration
     };
 
     req.data = data;
