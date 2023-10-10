@@ -280,7 +280,7 @@ const uploadImageToCloudinary = async(req = request, res = response) => {
 
   if(width < 1920 || height < 1080) {
     return res.status(400).json({
-      msg:`Las dimensiones de la imagen deben ser mayor a 1920x1080, dimensiones actuales:${width}x${height}`,
+      msg:`Las dimensiones de la imagen deben ser al menos 1920x1080, dimensiones actuales:${width}x${height}`,
     })
   }
 

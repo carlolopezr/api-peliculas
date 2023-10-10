@@ -10,7 +10,8 @@ class Server {
         this.port = process.env.PORT;
 
         this.paths= {
-            video:'/api/video'
+            video:'/api/video',
+            user:'/api/user'
         };
 
         this.middlewares();
@@ -29,6 +30,7 @@ class Server {
 
     routes() {
         this.app.use(this.paths.video, require('../routes/video'))
+        this.app.use(this.paths.user, require('../routes/user'));
     }
 
     listen(){
