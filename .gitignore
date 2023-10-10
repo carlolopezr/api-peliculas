@@ -3,3 +3,4 @@ node_modules/
 app.yaml
 Dockerfile
 uploads/
+cors_file.json
