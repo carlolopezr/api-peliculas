@@ -112,6 +112,7 @@ const videoDetection = async (req=request, res=response, next) => {
   
   const {gcsUri, user_id, date, movieUrl, duration} = req.data
   const email = req.email
+  const user_id_date = `${user_id}${date}`
   let explicitContent = ''
   const error = new Error('Hubo un error al intentar analizar su película con el detector de contenido explícito')
   error.customStatus = 602
@@ -140,6 +141,7 @@ const videoDetection = async (req=request, res=response, next) => {
     const datos = {
       date:date,
       user_id:user_id,
+      user_id_date:user_id_date,
       data: {
         explicitContent: explicitContent,
         movieUrl:movieUrl,
@@ -147,7 +149,14 @@ const videoDetection = async (req=request, res=response, next) => {
         duration:duration
       }
     }
+
+    console.log(datos.data.duration);
     await updateMovie(datos)
+      .catch(err => {
+        const errorUpdate = new Error('Película no encontrada en la base de datos')
+        next(error)
+        throw new Error(error)
+      })
     
     const notificationEmail = {
       email:email,
@@ -165,7 +174,7 @@ const videoDetection = async (req=request, res=response, next) => {
 
 const postVideoOnCloudStorage = async (req=request, res=response, next) => {
   try {
-    const { user_id, outputs, date } = req.data;
+    const { user_id, outputs, date, duration } = req.data;
     const email = req.email
     console.log(email);
     if (!outputs) return console.error('Faltan los outputs en la solicitud');
@@ -231,7 +240,8 @@ const postVideoOnCloudStorage = async (req=request, res=response, next) => {
             gcsUri:gcsUri,
             user_id:user_id,
             date:date,
-            movieUrl:movieUrl
+            movieUrl:movieUrl,
+            duration:duration
           }
         })
       .finally(() => {
@@ -427,6 +437,8 @@ const generateHLS = async (req, res, next) => {
     const masterPlaylistPath = path.join(inputPathInfo.dir, 'master_playlist.m3u8');
     await generateMasterPlaylist(outputs, masterPlaylistPath);
 
+
+
     let data = {
       outputs: outputs,
       date: date,
@@ -434,6 +446,8 @@ const generateHLS = async (req, res, next) => {
       masterPlaylistPath: masterPlaylistPath,
       duration:duration
     };
+
+    console.log(data.duration);
 
     req.data = data;
     console.log('Conversión realizada con éxito');
@@ -446,13 +460,14 @@ const generateHLS = async (req, res, next) => {
 const updateMovie = async(datos) => {
   try {
 
-    const { date, user_id, data} = datos
+    const { date, user_id, user_id_date, data} = datos
 
     const apiUrl = `${process.env.API_SERVER}/movie/update-movie`
     // const apiUrl = 'http://localhost:3000/api/movie/update-movie'
     const request = {
       date:date,
       user_id:user_id,
+      user_id_date:user_id_date,
       data: data
     }
 
@@ -464,13 +479,13 @@ const updateMovie = async(datos) => {
 
     const response = await axios.put(apiUrl, request, config)
 
-    if (response.status==404) {
+    if (response.status==404 || response.status == 500) {
       throw new Error('Película no encontrada en la base de datos')
     }
 
   } catch (error) {
     
-    console.log('Error al actualizar película:', error);
+    throw new Error(error.message)
   }
 }
 
