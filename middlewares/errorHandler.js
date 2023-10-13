@@ -19,6 +19,7 @@ const errorHandler = async (err, req, res, next) => {
   
       if (statusCode == 602) {
         await sendNotificationEmail(notificaciónEmail);
+        await deleteFilesInBucket(user_id, date)
       }
   
       if (statusCode == 601) {

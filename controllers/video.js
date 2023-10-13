@@ -154,8 +154,9 @@ const videoDetection = async (req=request, res=response, next) => {
     await updateMovie(datos)
       .catch(err => {
         const errorUpdate = new Error('Película no encontrada en la base de datos')
-        next(error)
-        throw new Error(error)
+        errorUpdate.customStatus = 602
+        next(errorUpdate)
+        throw new Error(errorUpdate)
       })
     
     const notificationEmail = {
