@@ -14,7 +14,7 @@ const uploadUserImageToCloudinary = async (req = request, res = response) => {
 		(error, result) => {
 			if (error) {
 				return res.status(500).json({
-					msg: 'Error al subir la imagen',
+					msg: 'Ha ocurrido un error al subir la imagen',
 					error,
 				});
 			}
