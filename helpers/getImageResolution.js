@@ -1,16 +1,15 @@
-const sizeOf = require('image-size')
+const sizeOf = require('image-size');
 
 const getImageResolution = (path) => {
-
     return new Promise((resolve, reject) => {
-        try {
-            const dimensions = sizeOf(path)
-            resolve(dimensions)
-        } catch (error) {
-            reject(error)
-        }
-    })
-}
+        sizeOf(path, (err, dimensions) => {
+            if (err) {
+                reject(err);
+            } else {
+                resolve(dimensions);
+            }
+        });
+    });
+};
 
-
-module.exports = getImageResolution
+module.exports = getImageResolution;
